@@ -1,52 +1,50 @@
-require 'anemone'
-require 'capybara/webkit'
-require 'capybara-screenshot'
-require 'cgi'
+require 'anemone'               # Ruby web spider
+require 'capybara/poltergeist'  # Headless browsing and screenshot capture
+require 'cgi'                   # URL escaping
+require 'csv'                   # Write CSV file
+require 'png_quantizator'       # Convert 32 to 8 PNGs - brew install pngquant
 
-# brew install optipng
-require 'piet'
+Capybara.default_driver = :poltergeist
 
-# brew install pngquant
-require 'png_quantizator'
-
-Capybara.default_driver = :webkit
-
-module TinyWeb
+module Hoarder
   extend Capybara::DSL
-  extend Capybara::Screenshot
   
   def self.crawl(url, page_count=100)
-    Anemone.crawl(url, {:delay => 3, :obey_robots_txt => true}) do |anemone|
+    Anemone.crawl(url, {:delay => 1, :obey_robots_txt => true}) do |anemone|
       @titles = []
       anemone.on_every_page do |page|
         begin
-          title = page.doc.at('title').inner_html rescue nil
-  
-          if title && title != "302 Found"
-            File.open('pages.txt', 'a+') {|file| file.puts("#{title} - #{page.url}")}
-            @titles.push title
-            visit(page.url)
-            save_image(CGI.escape(page.url.to_s))
-          else
-            puts("#{title} - #{page.url}")
-          end
+          process_page(page)
         rescue Exception => e
-          puts "Exception - #{title}: #{e.inspect}"
+          puts "Exception - #{e}: #{page.inspect}"
           next
         end
-
-        if @titles.size == page_count
-          exit
-        end
+        exit_crawl?(page_count)
       end
     end
   end
   
+  def self.process_page(page)
+    title = page.doc.at('title') ? page.doc.at('title').inner_html : ""
+    @titles.push title    
+    write_data_to_csv(title,page)
+    save_image(page.url)
+  end
+  
+  # Write info to CSV
+  def self.write_data_to_csv(title,page)
+    CSV.open('pages.csv', 'a+') {|csv| csv << [title, page.url, page.code, page.response_time, page.depth]}
+  end
+  
   def self.save_image(url)
-    saver = Capybara::Screenshot::Saver.new(Capybara, Capybara.page, false, url)
-    saver.save
-    Piet.pngquant(saver.screenshot_path)
+    visit(url)
+    save_screenshot("#{CGI.escape(url.to_s)}.png", :full => true)
+    PngQuantizator::Image.new("#{CGI.escape(url.to_s)}.png").quantize!
+  end
+  
+  def self.exit_crawl?(page_count)
+    exit if @titles.size == page_count
   end
 end
 
-TinyWeb.crawl('http://library.wisc.edu')
+Hoarder.crawl('http://library.wisc.edu', 10)
