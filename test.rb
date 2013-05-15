@@ -30,7 +30,7 @@ module Hoarder
           puts "Exception - #{e}"
           next
         end
-        #exit_crawl?(page_count)
+        exit_crawl?(page_count)
       end
     end
   end
@@ -41,8 +41,8 @@ module Hoarder
     unless page.code == 302 or page.doc.at('iframe')
       page.data = {}
       page.data[:title] = begin page.doc.at('title').inner_html rescue "" end
-      #visit(page.url.to_s)
-      #save_image(CGI.escape(page.url.to_s))
+      visit(page.url.to_s)
+      save_image(CGI.escape(page.url.to_s))
     end
   end
 
@@ -55,7 +55,7 @@ module Hoarder
   
   # Shall we keep crawling?
   def self.exit_crawl?(page_count)
-    #exit if @pages.count == page_count
+    exit if @pages.count == page_count
   end
 end
 
